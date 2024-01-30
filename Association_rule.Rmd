@@ -1,0 +1,378 @@
+---
+title: "Association Rule For English Movies"
+author: "Marco Ayuob"
+date: "2024-01-12"
+output: html_document
+bibliography: references.bib
+    link-citations: yes
+    toc: true
+    toc_float:
+      toc_collapsed: true
+      toc_depth: 7
+      sections: true
+      theme: readable
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Introduction
+
+The project aims to use association rule mining to uncover patterns and relationships within a dataset of English movies, specifically focusing on the co-occurrence of budget, rate, and genre. The insights gained from this analysis could be valuable for movie producers, providing actionable intelligence to guide decision-making in the production process and improve the chances of creating successful movies that resonate with audiences.
+
+-   Data Loading and Preprocessing:
+    -   A file named _ART.csv” that contains data related to movies is to be read in CSV format.
+    -   Installs and loads necessary packages like arules, arulesViz, and arulesCBA for association rule  
+        mining.
+
+```{r echo=FALSE}
+setwd("/Users/marcoayuob/Downloads/Data science /1st Year/Unsupervised Learning/Association rule Project")
+# Read the dataset
+movies_data <- read.csv("ART.csv")
+# reading and installing  the packages
+#install.packages("arules")
+#install.packages("arulesViz")
+#install.packages("arulesCBA")
+
+library(arules)
+library(arulesViz)
+library(arulesCBA)
+
+```
+
+-   Exploratory Data Analysis and data cleaning
+    -   Using the cut points to make label for our variables/ columns .
+    -   The specified columns such as ‘genre’, ‘budget’, ‘Years’, and ‘Rate’will be  converted to the factor 
+        type to enable categorical analysis.
+    -   Converts the entire dataset into transactions for association rule mining.
+
+```{r}
+#  defined cut_points and labels for Budget
+budget_cut_points <- c(0, 2, 4, 6, 10, 15, Inf)
+budget_labels <- c("Very Low", "Low", "Normal", "High", "Very High", "Highest")
+
+# Use the cut function to categorize Budget values
+budget_categories <- cut(movies_data$Budget, breaks = budget_cut_points, labels = budget_labels, include.lowest = TRUE)
+
+# Add Budget_Category to movies_data
+movies_data$Budget_Category <- as.character(budget_categories)
+
+
+```
+
+
+
+
+
+```{r}
+# Define the cut points and labels for the "Rate_Category" column
+rate_cut_points <- c(0.1, 2, 4, 6, 7, 8, 9, 10)
+rate_labels <- c("Very Low", "Low", "Normal", "Good", "Good Plus", "Very Good", "Perfect")
+# Use the cut function to categorize "Rate" values for the entire column
+movies_data$Rate_Category <- cut(movies_data$Rate, breaks = rate_cut_points, labels = rate_labels, include.lowest = TRUE)
+
+```
+
+
+
+```{r}
+# Define the cut points and labels for the years
+year_cut_points <- c(1990, 1995, 2000, 2005, 2010, Inf)
+year_labels <- c("1991-1994", "1995-1999", "2000-2004", "2005-2009", "2010-2017")
+
+# Use the cut function to categorize years for the entire column
+movies_data$Year_Category <- cut(movies_data$Year, breaks = year_cut_points, labels = year_labels, include.lowest = TRUE)
+
+```
+
+
+
+```{r}
+#converting the new columns to factor in order we can use them in association rule
+library(dplyr)
+
+movies_data$Budget_Category <- factor(movies_data$Budget_Category, levels = labels)
+movies_data$Rate_Category <-factor(movies_data$Rate_Category, levels = labels)
+movies_data$Year_Category <- factor(movies_data$Year_Category, levels = labels)
+
+#convert Genre to a factor
+movies_data$Genre <- factor(movies_data$Genre)
+genre_levels <- c("Action", "Drama", "Comedy", "Science Fiction", "Romance", "Family", "Horror", "Animation", "Thriller", "Mystery", "Fantasy", "Crime", "Adventure", "Biography", "History", "Sport", "War", "Music", "Documentary", "Western", "Musical", "Sci-Fi")
+movies_data$Genre <- factor(movies_data$Genre, levels = genre_levels)
+
+```
+
+```{r}
+#show some structure and rows from the data 
+str(movies_data)
+head(movies_data, 100)
+
+```
+
+
+
+
+```{r}
+#implementing the cross table to show the data distribution across genres budget and  rate
+cross_table <- xtabs(~ Budget_Category + Rate_Category + Genre, data = movies_data)
+print(cross_table)
+```
+
+From this table we can say genres like Action and Drama have the highest frequency across different budget and rate categories. Comedy movies are preferred across different rate categories and are often produced with very low and low budgets. Low budget movies are produced across various genres, while very low budget movies are common in genres like Horror and Science Fiction. Movies with ‘Good’ and ‘Normal’ ratings are more common across genres and budget categories. Horror and Thriller genres are versatile choices for movie producers, whereas genres like Biography, History, Sport, War, Music, and Musical have lower representation in the dataset.
+
+
+```{r, warning=FALSE}
+# Convert to transactions
+movies_transactions <- as(movies_data, "transactions")
+```
+
+```{r}
+#show the first 20 rows from the dataset after converted to transactions 
+inspect(movies_transactions[1:20]) 
+```
+
+
+
+
+
+```{r, echo=FALSE}
+head(itemFrequency(movies_transactions, type="absolute"))
+
+```
+```{r}
+# Subset transactions with specific columns to use them in argiori method
+subset_transactions <- movies_data[, c("Genre", "Budget_Category", "Rate_Category", "Year_Category")]
+```
+
+```{r}
+head(subset_transactions)
+str(subset_transactions)
+
+```
+
+showing some plots to impact the relationships of cross table
+
+```{r}
+
+#install.packages("vcd")
+
+library(vcd)
+```
+
+```{r}
+cross_table <- xtabs(~ Budget_Category + Rate_Category + Genre, data = movies_data)
+#Create a mosaic plot for a specific genre (e.g., 'Action')
+mosaicplot(cross_table[, , "Action"], main = "Budget vs. Rate for Action Genre")
+```
+
+We can say from that plot that Action movies are often rated Very Low or Low due to stunts and violence. Higher-budget movies are more likely to have this rating. Action movies with very low budgets are more common as they don’t require elaborate sets or costumes. Very high-budget action movies are the least common as they are more expensive to produce.
+
+```{r}
+#Create a mosaic plot for a specific genre (e.g., 'Comedy')
+mosaicplot(cross_table[, , "Comedy"], main = "Budget vs. Rate for Comedy Genre")
+```
+
+Comedy movies are mostly rated Good for General Audiences. A negative correlation exists between budget and rating for comedy movies. Low budgets are more common in comedy movies. Normal budget movies are the most frequently produced.
+
+
+
+
+```{r}
+# Run apriori algorithm with specific rhs Genre
+rules <- apriori(subset_transactions, 
+                 parameter = list(supp = 0.05, conf = 0.05), 
+                 appearance = list(default = "lhs", rhs = "Genre=Drama"), 
+                 control = list(verbose = FALSE))
+```
+
+```{r setup, include=FALSE}
+rules <- rules[-c(1:1)]
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+```{r}
+# Inspect the unique rules
+inspect(rules)
+```
+The Apriori algorithm is being used to identify frequent itemsets and association rules for movies in the “Drama” genre. The algorithm uses a support threshold of 0.05 and a confidence threshold of 5%. The results show interesting associations between budget, rating, and genre. For example, low-budget movies are more likely to be dramas. These associations can be used to target potential audiences for movies.
+
+
+```{r}
+# making a summary for the first association rule 
+summary(rules)
+```
+```{r}
+# Plot rules
+plot(rules, method = "graph", control = list(type = "items"))
+```
+
+
+```{r}
+# the opposite Run apriori algorithm with specific lhs item
+rules1 <- apriori(subset_transactions, 
+                 parameter = list(supp = 0.05, conf = 0.05), 
+                 appearance = list(default = "rhs", lhs = "Genre=Drama"), 
+                 control = list(verbose = FALSE))
+```
+
+```{r message=FALSE}
+rules1 <- rules1[-c(1:12)]
+```
+
+
+```{r}
+inspect(rules1)
+```
+Dramas with low budgets are more likely to have a good or normal rating. This suggests that dramas are more sensitive to production budgets, and low budget dramas may be more profitable due to their lower production costs. We can use The Apriori algorithm  to make informed decisions about which types of dramas to produce and market to audiences.
+
+
+
+
+
+
+
+```{r}
+#Run apriori algorithm with specific rhs Genre
+rules2 <- apriori(subset_transactions, 
+                 parameter = list(supp = 0.05, conf = 0.05), 
+                 appearance = list(default = "lhs", rhs = "Genre=Action"), 
+                 control = list(verbose = FALSE))
+```
+
+```{r message=FALSE}
+rules2 <- rules2[-c(1:1)]
+```
+
+
+
+```{r}
+inspect(rules2)
+```
+ From the previous results we can say that:
+ {Budget_Category=very Low} --> [Genre Action} 
+Because action movies often rely on special effects and action sequences, they can be relatively inexpensive to produce.
+
+ {Rate_Category=Normal} --> [Genre Action}
+This may be because action movies have a broad appeal and producers are more willing to produce them if they expect them to perform well at the box office.
+
+
+
+```{r}
+#Run apriori algorithm with specific rhs budget
+rules3 <- apriori(subset_transactions, 
+                 parameter = list(supp = 0.07, conf = 0.09), 
+                 appearance = list(default = "lhs", rhs = "Budget_Category=Very Low"), 
+                 control = list(verbose = FALSE))
+```
+
+```{r message=FALSE}
+rules3 <- rules3[-c(1:1)]
+```
+
+
+```{r}
+inspect(rules3)
+```
+```{r}
+library(arulesViz)
+
+# Plot the rules
+plot(rules3, method = "paracoord", measure = "lift")
+
+
+
+```
+
+we can say that one of the most profitable genre is comedy and drama because they don't require a high production budget so the cost of production will be very low, while we can say also the the higher rate we can got from producing movies in very low budget will not exceed the Good rate, which is something good for some producers if they obtained this rate (good) with that amount of money (budget)
+```{r}
+# Perform association rule mining
+rulesall <- apriori(subset_transactions, 
+                     parameter = list(supp = 0.08, conf = 0.40), 
+                     control = list(verbose = FALSE))
+
+
+```
+
+```{r}
+rulesall <- rulesall[-c(1:2)]
+```
+
+
+
+```{r}
+inspect(rulesall)
+```
+
+```{r}
+plot(rulesall, measure = c("support", "confidence"), main = "Support vs. Confidence")
+
+```
+```{r}
+plot(rulesall, measure = "lift", method = "matrix", control = list(max.levels = 5), main = "Lift by Genre")
+
+```
+```{r}
+plot(rulesall, method = "graph", control = list(type = "itemsets"))
+```
+
+
+```{r}
+plot(rulesall, method = "paracoord", measure = "lift")
+```
+
+The movie industry is diverse, with a range of genres and budgets that can influence the final product. One notable observation is that comedy films tend to have a normal rating and a low budget. This suggests that these movies prioritize humor and entertainment over critical acclaim and complex storytelling. Additionally, the lower budget reflects the relative simplicity of producing comedy compared to other genres.
+Films with a low budget often tend to have a normal rating because production constraints can limit the scope and scale of the film, making it challenging to achieve high production values and artistic depth that typically contribute to a higher rating. Therefore, the final product may prioritize entertainment over critical acclaim.
+Moving on to genre-based observations, drama films tend to have a good rating, indicating that these movies are more often geared towards serious themes, complex characters, and well-crafted narratives. However, drama movies tend to have a very low budget, suggesting that filmmakers may be willing to take creative risks and explore darker or more nuanced topics, even with limited resources. This can result in a compelling and thought-provoking film that resonates with audiences.
+Movies with a good rating tend to have a very low budget, implying that some filmmakers believe that high-quality storytelling can be achieved even with limited resources. This approach may involve focusing on strong performances, impactful dialogue, and a well-structured narrative, rather than relying on expensive special effects or elaborate sets. This highlights the importance of a strong storyline and well-written script in the success of a movie.
+Similarly, the correlation between movies with a normal rating and a very low budget indicates that this combination is common in the movie industry. This suggests that there is a market for films that offer entertaining and engaging stories without the need for high production values or critical acclaim. Therefore, filmmakers can focus on creating a fun and engaging storyline without worrying about the complexities of critical acclaim.
+Finally, the observation that movies with a very low budget often have a normal rating reinforces the idea that low-budget films can still be well-received by audiences. This finding contradicts the notion that low budgets are always associated with poor quality or underwhelming storytelling. Instead, it demonstrates that creative and engaging stories can be produced even with limited resources.
+In summary, these observations provide valuable insights into the relationships between genre, budget, and rating in the movie industry. By understanding these patterns, filmmakers and production houses can make informed decisions about the type of films they produce, allocate resources effectively, and reach a wider audience.
+```{r}
+# Check if the association rules are maximal (not subsumed by any other rule)
+is.maximal(rulesall)
+```
+
+
+
+as we see here In the output provided, all rules are identified as maximal, as indicated by the TRUE values.
+These results suggest that the identified itemsets are not subsets of any larger frequent itemsets within the specified support and confidence thresholds.
+
+
+
+
+
+
+```{r}
+#install.packages('arulesViz')
+library(arulesViz)
+```
+
+
+```{r}
+#making high conf rule
+high_conf_rules <- subset(rulesall, confidence > 0.5)
+high_conf_rules
+```
+
+```{r}
+inspect(high_conf_rules)
+```
+
+```{r}
+# Visualizing the subset of high conf.
+plot(high_conf_rules)
+```
+
+
+
+
+```{r}
+plot(high_conf_rules, method = "paracoord", control = list(reorder = TRUE))
+```
+The association rules presented in this study offer valuable and concrete insights for movie producers. Our analysis reveals that movies categorized as Comedy or Drama are significantly associated with a Very Low budget. We also found that movies with a Normal rate category are strongly associated with a Very Low budget. These findings clearly indicate that producers can leverage these patterns to make well-informed decisions regarding the budget allocation and categorization of their movies. It is imperative that producers take these insights seriously and take proactive steps to ensure that their movies are optimally categorized and budgeted. Such knowledge can prove critically important in maximizing the commercial success of a movie project.
+
+
+
+
+

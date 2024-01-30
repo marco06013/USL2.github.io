@@ -1,0 +1,413 @@
+---
+title: "Clustering For English Movies, The data source: IMDB"
+author: "Marco Ayuob"
+date: "2024-01-12"
+output:
+  html_document: 
+    toc: true
+    toc_float:
+      toc_collapsed: true
+      toc_depth: 7
+      sections: true
+      theme: readable
+    theme: spacelab
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Introduction
+
+In this project, we will be delving into the fascinating world of movies. Our goal is to explore patterns and relationships within a diverse dataset that contains information such as budget, release year, user ratings, and genre. By utilizing clustering techniques, we aim to uncover natural groupings and similarities among movies. This will not only be beneficial for the audience but also for the producers.
+
+- The data source is from IMDB
+
+
+## 	Data Exploration and Cleaning:
+- To begin, establish the directory where you will be working and  
+  proceed to load the dataset for the movie.
+- Please perform a thorough analysis of the dataset by examining its 
+  summary statistics and structural characteristics.
+- To maintain the accuracy and consistency of the data, it is crucial to   convert the relevant columns into numeric data types and address any    missing values. This can help in ensuring the reliability and   
+  usefulness of the data for analysis and decision-making purposes.
+
+```{r read the file, echo=TRUE}
+# Set the working directory and read the file
+movies_AR <- read.csv("/Users/marcoayuob/Downloads/Data science /1st Year/Unsupervised Learning/Clustering Project/CL_draft.csv")
+```
+
+```{r str, echo=TRUE}
+# Display summary information and structure of the dataset
+summary(movies_AR)
+str(movies_AR)
+```
+
+```{r to numeric, echo=TRUE}
+# Convert certain columns to numeric data types
+movies_AR$Budget <- as.numeric(as.character(movies_AR$Budget))
+movies_AR$Year <- as.numeric(as.character(movies_AR$Year))
+movies_AR$Rate <- as.numeric(as.character(movies_AR$Rate))
+```
+
+
+```{r missing values, echo=TRUE}
+# Checking for missing values in the dataset and handling them
+colSums(is.na(movies_AR))
+movies_AR <- na.omit(movies_AR)
+movies_AR$Genre[is.na(movies_AR$Genre)] <- NA
+movies_AR$Budget[is.na(movies_AR$Budget)] <- mean(movies_AR$Budget)
+```
+
+```{r arules, include=FALSE}
+# Install and load the necessary library for association rule mining
+# install.packages("arules")
+library(arules)
+```
+
+```{r remove NA, echo=TRUE}
+# Remove rows with empty Genre
+movies_AR <- movies_AR[movies_AR$Genre != "", ]
+```
+
+## Statistical values and plots before clustering
+
+
+```{r mean rating, echo=TRUE}
+# Calculating mean ratings by genre and create a bar plot to visualize them
+mean_ratings <- aggregate(Rate ~ Genre, data = movies_AR, FUN = mean, na.rm = TRUE)
+barplot(mean_ratings$Rate, names.arg = mean_ratings$Genre, 
+        col = "skyblue", xlab = "Genre", ylab = "Mean Rating",
+        main = "Mean Ratings by Genre", las = 2)
+```
+we can see from this plot the mean (Average) rating for every Genre 
+
+```{r mean budget, echo=TRUE}
+# Calculate mean budget by rate and create a scatter plot to visualize them
+mean_budget <- aggregate(Budget ~ Rate, data = movies_AR, FUN = mean, na.rm = TRUE)
+plot(mean_budget$Rate, mean_budget$Budget, 
+     xlab = "Rate", ylab = "Mean Budget", 
+     main = "Mean Budget by Rate", col = "blue", pch = 16)
+```
+from the previous plot we can observe that from rate 6 to 8 are the movies that have the highest budget (production coast)
+
+
+
+```{r Max rate by year, echo=TRUE}
+# Calculating the movies with the maximum rating and corresponding year(s)
+max_rating <- max(movies_AR$Rate)
+years_highest_rating <- unique(movies_AR$Year[movies_AR$Rate == max_rating])
+years_highest_rating
+```
+
+those are the years that have highest rate of movies 
+
+
+```{r Max rate plot, echo=TRUE}
+# Bar plot for years with maximum rating
+barplot(table(movies_AR$Year[movies_AR$Rate == max_rating]), 
+        xlab = "Year", ylab = "Frequency", 
+        main = "Years with Maximum Rating", col = "darkgreen")
+```
+
+
+
+
+## Perform K-means Clustering
+
+```{r selecting N columns, echo=TRUE}
+# Selecting only the numeric columns of a movies dataframe using sapply # with is.numeric function for each column
+
+# A new data frame called movies_z is formed by using the scale 
+# function #on all numeric columns of the existing data frame, 
+# movies_numeric..
+library(fpc)
+movies_numeric <- movies_AR[, sapply(movies_AR, is.numeric)]
+movies_z <- as.data.frame(lapply(movies_numeric, scale))
+```
+
+```{r calculating custers, echo=TRUE}
+# Calculate within-cluster sum of squares (WCSS) for different cluster counts
+wcss <- numeric(10)
+for (i in 1:10) {
+  movies1 <- kmeans(movies_z, centers = i)
+  wcss[i] <- movies1$tot.withinss
+}
+```
+
+```{r Elbow point, echo=TRUE}
+# Plot WCSS to determine optimal number of clusters (Elbow Method)
+plot(1:10, wcss, type = "b", xlab = "Number of Clusters", ylab = "WCSS")
+```
+
+The elbow plot analysis suggests that the ideal number of clusters is 4 as the curve becomes flat beyond this point, indicating that further clusters are not significant.	
+
+```{r clustering, echo=TRUE}
+# Perform k-means clustering with the selected number of clusters
+k <- 4
+kmeans_result <- kmeans(movies_z, centers = k)
+movies_AR$cluster <- kmeans_result$cluster
+```
+
+```{r results, echo=TRUE}
+kmeans_result
+```
+- The following information provides a comprehensive breakdown of the four clusters and their characteristics based on budget, release year, and 
+  rate. 
+  -  Cluster 1, which comprises 490 movies, is characterized by low budgets, moderately recent release years, and low rates. An example movie from       this cluster is "Sharknado" (2013). The within-cluster sum of squares for this cluster is 1141.079, indicating that the data points within this      cluster are somewhat closer to each other in terms of the features considered.
+
+  - Cluster 2 consists of 1794 movies and is characterized by high budgets, moderately recent release years, and moderate rates. An example movie 
+  from this cluster is "Inception" (2010). The within-cluster sum of squares for this cluster is 2053.688, which is somewhat higher than Cluster 1. 
+  However, it is still the lowest within-cluster sum of squares among all four clusters, suggesting that the movies within this cluster are more 
+  homogeneous compared to the other clusters.
+
+  - Cluster 3 is made up of 971 movies and is characterized by moderate budgets, somewhat older release years, and moderate rates. An example movie 
+  from this cluster is "The Matrix" (1999). The within-cluster sum of squares for this cluster is 1625.766, indicating that the data points within 
+  this cluster are somewhat closer to each other in terms of the features considered.
+
+  - Cluster 4 is the largest cluster, consisting of 2449 movies that have low-moderate budgets, recent release years, and moderate rates. An example   movie from this cluster is "Get Out" (2017). The within-cluster sum of squares for this cluster is 2035.016, which is higher than Cluster 1 and    
+  Cluster 3 but lower than Cluster 2.
+
+## Visualization of clusters
+
+
+```{r 2D, echo=TRUE}
+# Visualize clusters by rating and budget
+plot(movies_AR$Rate, movies_AR$Budget, col = movies_AR$cluster, 
+     xlab = "Rating", ylab = "Budget", 
+     main = "Clusters of Movies by Rating and Budget")
+legend("topright", legend = unique(movies_AR$cluster), col = 1:max(movies_AR$cluster), pch = 1)
+
+```
+
+
+
+- we can see the results in a better way by ploting 3D plot
+
+```{r 3DP, echo=TRUE}
+# Install and load the necessary library for 3D scatter plots
+# install.packages("scatterplot3d")
+library(scatterplot3d)
+```
+
+
+```{r 3D plot, echo=TRUE}
+# Create the 3D scatter plot
+scatterplot3d(movies_AR$Rate, movies_AR$Budget, movies_AR$cluster,
+              xlab = "Rating", ylab = "Budget", zlab = "Cluster",
+              main = "Clusters of Movies by Rating and Budget",
+              color = as.numeric(movies_AR$cluster),
+              pch = 16,
+              type = "h",
+              angle = 55
+)
+```
+
+These clusters are represented by different colors. The ‘Rating’ axis indicates the average rating of movies, likely on a scale of 0-10. The ‘Budget’ axis represents the production budget of movies and is scaled in scientific notation, for example, 4e+08 means a budget of 400 million units of currency. The ‘Cluster Axis’ denotes the cluster to which each movie has been assigned.
+
+```{r clusters mean}
+# Aggregate data within each cluster to find mean ratings and budgets
+aggregate(movies_AR[, c("Rate", "Budget")], by = list(movies_AR$cluster), FUN = mean)
+
+```
+
+- The previous results represent the mean of rate and budget in every cluster, before we assigen them to Genres.
+  
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+- Engaging Genre to every cluster
+
+```{r Ex, echo=TRUE}
+# Extract relevant columns for cluster and genre
+cluster_genre <- data.frame(Cluster = movies_AR$cluster, Genre = movies_AR$Genre)
+```
+
+```{r Genres in Clusters}
+# How to find the highest and lowest genre in each cluster
+find_high_low_genre <- function(cluster_data) {
+  freq_genre <- table(cluster_data$Genre)
+  highest_genre <- names(freq_genre)[which.max(freq_genre)]
+  lowest_genre <- names(freq_genre)[which.min(freq_genre)]
+  return(data.frame(Cluster = unique(cluster_data$Cluster), Highest_Genre = highest_genre, Lowest_Genre = lowest_genre))
+}
+
+# Apply the function to get a summary of highest and lowest genres in each cluster
+genre_summary <- by(cluster_genre, cluster_genre$Cluster, find_high_low_genre)
+# Convert the  object to a data frame
+genre_summary_df <- do.call(rbind, lapply(genre_summary, data.frame))
+```
+
+```{r include=FALSE}
+# Melt the data for easier plotting
+# Load necessary libraries
+library(reshape2)
+
+library(dplyr)
+
+library(magrittr)
+# Create a new data frame for plotting the stacked bar plot
+genre_plot_data <- cluster_genre %>%
+  group_by(Cluster, Genre) %>%
+  summarise(Count = n(), .groups = 'drop') %>%
+  arrange(Cluster, desc(Count))
+
+
+```
+
+
+```{r CRN, include=FALSE}
+# Install the ggplot2 package specifying the CRAN mirror
+install.packages("ggplot2", repos = "https://cloud.r-project.org")
+
+```
+
+
+```{r pk, include=FALSE}
+
+#install.packages("ggplot2")
+library(ggplot2)
+
+```
+
+
+```{r plot, warning=FALSE}
+# Plotting the stacked bar plot
+ggplot(genre_plot_data, aes(x = Cluster, y = Count, fill = Genre)) +
+  geom_bar(stat = "identity") +
+  labs(x = "Cluster", y = "Count", fill = "Genre") +
+  theme_minimal() +
+  theme(legend.position = "right", 
+        legend.title = element_blank(),
+        legend.text = element_text(size = 8),
+        legend.key.height = unit(0.5, "lines"))  # Adjust the height to your preference
+
+```
+This plot displays the number of movies with a specific genre in each cluster.
+
+
+```{r lowest highest, echo=TRUE}
+
+cluster_genre <- data.frame(Cluster = movies_AR$cluster, Genre = movies_AR$Genre)
+
+get_high_low_genre <- function(cluster_data) {
+  freq_genre <- table(cluster_data$Genre)
+  highest_genre <- names(freq_genre)[which.max(freq_genre)]
+  lowest_genre <- names(freq_genre)[which.min(freq_genre)]
+  return(c(Highest_Genre = highest_genre, Lowest_Genre = lowest_genre))
+}
+
+# Calculate highest and lowest genres for each cluster
+genre_summary <- by(cluster_genre, cluster_genre$Cluster, get_high_low_genre)
+```
+
+
+
+```{r Display results, echo=TRUE}
+# Display results
+for (i in 1:length(genre_summary)) {
+  cat("Cluster", names(genre_summary)[i], "\n")
+  cat("Highest genre:", genre_summary[[i]]["Highest_Genre"], "\n")
+  cat("Lowest genre:", genre_summary[[i]]["Lowest_Genre"], "\n\n")
+}
+
+```
+
+
+ - Cluster 1
+	-	Highest Genre: Action
+	-	Lowest Genre: Mystery
+	-	Analysis:
+		This cluster predominantly includes Action movies, with a focused preference for high-energy and thrilling content, as suggested by the absence of  
+		Mystery movies.
+	-	This cluster encompasses a wide range of Action sub-genres, from intense blockbusters to adventure movies.
+	-	Some examples of movies that fall under this cluster are "Die Hard" (Action), known for its intensity and iconic scenes, and "Mad Max: Fury Road" 
+	 (Action), set in a post-apocalyptic world.
+  
+  
+- Cluster 2 
+	-	Highest Genre: Comedy
+	-	Lowest Genre: TV Movie
+	-	Analysis:
+	-	The second cluster is distinguished by its emphasis on Comedy, which includes a variety of potential sub-genres such as romantic comedies and slapstick 
+	  humor.
+	-	The absence of TV Movies suggests a preference for theatrical releases over made-for-TV productions.
+	-	Some examples of movies that fall under this cluster are "Dumb and Dumber" (Comedy), a classic slapstick comedy known for its humor and memorable 
+	  characters, and "Anchorman: The Legend of Ron Burgundy" (Comedy), a satirical comedy set in the world of television journalism.
+    
+- Cluster 3 
+	-	Highest Genre: Horror
+	-	Lowest Genre: Foreign
+	-	Analysis:
+	-	The third cluster is characterized by a liking for Horror movies, especially those produced domestically.
+	-	The absence of Foreign films suggests a focus on horror content with broad mainstream appeal.
+	-	Some examples of movies that fall under this cluster are "The Conjuring" (Horror), a successful horror film known for its suspense and supernatural 
+	  elements, and "A Nightmare on Elm Street" (Horror), a classic horror film featuring the iconic character Freddy Krueger.
+ 
+ - Cluster 4 
+	-	Highest Genre: Drama
+	-	Lowest Genre: Foreign
+	-	Analysis:
+	- The fourth cluster is identified as having a preference for Drama movies, like Cluster 3, it avoids Foreign films.
+	- This suggests a preference for domestic dramas, potentially with wide audience appeal and relatable themes.
+	-	Some examples of movies that fall under this cluster are "Forrest Gump" (Drama), a beloved drama with a mix of heartwarming and thought-provoking moments,     and "The Shawshank Redemption" (Drama), a critically acclaimed drama known for its powerful storytelling.
+ 
+
+## Overall Conclusion
+
+The K-means clustering analysis has provided valuable insights into distinct audience preferences within the dataset. This data-driven approach has several implications for both film producers and audiences. Producers can use this information to tailor their content to match the preferences of target audience segments, optimize their content creation strategies, allocate budgets more efficiently and direct marketing efforts more strategically. Audiences can benefit from a more personalized viewing experience, explore films beyond their typical preferences, make more informed choices, and experience higher satisfaction levels. Overall, this clustering analysis contributes to a more efficient and targeted film industry, promoting diversity in content creation, and enhancing the overall satisfaction of moviegoers.
+
+## Recommendations for Audience
+```{r}
+# making a function that show all the movies from every cluster
+get_movies_in_cluster <- function(movies_data, cluster_number) {
+
+  
+  # Filter movies in the specified cluster
+  cluster_movies <- subset(movies_data, cluster == cluster_number)
+  
+  return(cluster_movies)
+}
+
+
+movies_in_cluster3 <- get_movies_in_cluster(movies_AR, cluster_number = 3)
+head(movies_in_cluster3)
+```
+
+by this function users have the ability to utilize it to investigate movies that fall under a certain group, such as Cluster 3 as an instance. 
+This enables the audience to discover movies that possess comparable traits regarding budget, year of release, and ratings provided by viewers.
+
+# Compute the dissimilarity matrix
+dissimilarity_matrix <- dist(movies_z, method = "euclidean")
+# Perform hierarchical clustering
+hc <- hclust(dissimilarity_matrix, method = "complete")
+
+# Plot the dendrogram
+plot(hc, cex = 0.6, hang = -1)  # 'cex' controls the size of labels, 'hang' controls how the labels hang from the tree
+
+
+# Cutting the dendrogram to form clusters
+cutree(hc, k = 4)  # Here, I'm cutting the tree to form 4 clusters, but you can choose another number based on your dendrogram
+
+
+# Assigning cluster labels to the original data
+movies_AR$hc_cluster <- cutree(hc, k = 4)
+
+# Analyzing clusters
+table(movies_AR$hc_cluster)
+
+
+# Comparing with K-means clusters
+table(movies_AR$cluster, movies_AR$hc_cluster)
+
+
+
+
+

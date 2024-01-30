@@ -1,0 +1,393 @@
+---
+title: "PCA for Movies, The data source: IMDB"
+author: "Marco Ayuob"
+date: "2024-01-12"
+output:
+  html_document: 
+    toc: true
+    toc_float:
+      toc_collapsed: true
+      toc_depth: 7
+      sections: true
+      theme: readable
+    theme: spacelab
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Introduction
+
+The main goal of the project is to gain a better understanding of the characteristics of movies and how they relate to each other by using statistical techniques and data visualization. This analysis can provide valuable insights for individuals involved in the movie industry, such as filmmakers, marketers, and distributors, to comprehend which factors contribute the most to a movie’s success and popularity. The project focuses on methodical data analysis and employs advanced techniques like PCA, making it a robust approach to understanding complex datasets in the entertainment domain.
+
+```{r read, echo=TRUE}
+# Set the working directory and read the file
+data <- read.csv("/Users/marcoayuob/Downloads/archive/movies_metadata.csv")
+```
+
+```{r kklj, include=FALSE}
+options(repos = c(CRAN = "https://cloud.r-project.org/"))
+
+```
+
+
+
+```{r lly, include=FALSE}
+# Set CRAN mirror
+options(repos = c(CRAN = "https://cloud.r-project.org/"))
+
+# Install corrplot package
+#install.packages("corrplot")
+
+library(corrplot)
+```
+
+## Exploratory Data Analysis (EDA)
+
+To begin, it’s important to visually analyze the data using histograms and boxplots for numerical variables like runtime and vote average. This initial step is critical in comprehending the distribution and scope of these variables. Furthermore, examining pairwise scatter plots offers valuable insight into the correlations between different pairs of variables.
+
+```{r read head, echo=TRUE}
+nrow(data)
+ncol(data)
+```
+
+
+
+```{r bbvc, echo=TRUE}
+# Histograms for numerical variables
+hist(data$runtime, main = "Histogram of Runtime", xlab = "Runtime")
+hist(data$vote_average, main = "Histogram of Vote Average", xlab = "Vote Average")
+
+# Boxplots for numerical variables
+boxplot(data$runtime, main = "Boxplot of Runtime", ylab = "Runtime")
+boxplot(data$vote_average, main = "Boxplot of Vote Average", ylab = "Vote Average")
+
+# Pairwise scatter plots
+pairs(~ runtime + vote_average + revenue + vote_count, data = data, main = "Pairwise Scatter Plot")
+
+```
+we can see from the Plots: No distinct pattern emerges between runtime and vote_count. There is a weak positive trend between Vote Average and Revenue but no apparent relationship between runtime and revenue. Films with higher revenues tend to have a higher vote count.
+It revealed that there are outliers with significantly longer lengths, and that movies with higher ratings tend to generate more box office income. This information could be of interest to movie producers, marketers, and platforms hosting these movies. Further statistical analysis could refine these insights and potentially guide decision-making in movie production and marketing strategies.
+
+```{r types, echo=TRUE}
+sapply(data, class)
+```
+Some of the variables have been classified as “numeric” (runtime, revenue, vote_average), while one has been marked as “integer” (vote_count). These variables can be directly used in PCA after scaling for quantitative analysis. However, it’s essential to preprocess and clean the data before performing PCA. If there are any character variables that represent categories, consider transforming them into numerical form using methods like one-hot encoding before analysis, if they are relevant.
+
+```{r vvv, echo=TRUE}
+data <- data[sample(nrow(data), size = 1000, replace = FALSE), ]
+
+# Identify character variables with only one level
+single_level_vars <- sapply(data, function(x) is.character(x) && length(unique(x)) == 1)
+single_level_var_names <- names(single_level_vars[single_level_vars])
+
+# Remove character variables with only one level
+data <- data[, !names(data) %in% single_level_var_names]
+
+# Features (independent variables)
+X <- data[, !(names(data) %in% c('revenue', 'vote_average'))]
+
+# Target variables
+Y <- data[, c('revenue', 'vote_average')]
+
+# Combine X and Y into a single data frame
+regression_data <- cbind(X, Y)
+
+# Perform Multivariate Regression
+model <- lm(cbind(revenue, vote_average) ~ ., data = regression_data)
+
+```
+
+```{r taking sample, include=FALSE}
+# Assuming 'data' is your data frame in R
+data <- data[sample(nrow(data), size = 1000, replace = FALSE), ]
+
+
+
+
+install.packages("corrplot")
+library(corrplot)
+```
+
+
+
+
+
+Calculating and visualize the correlation matrix to identify strong linear relationships between numerical variables.
+```{r correlation numeric variables, echo=TRUE}
+numeric_data <- data[, sapply(data, is.numeric)]
+
+# Compute the correlation matrix
+correlation <- cor(numeric_data)
+
+# Print the correlation matrix
+print(correlation)
+
+
+```
+This correlation analysis is an important step in understanding the relationships between different movie attributes, which can be essential for further statistical analysis, predictive modeling, or data-driven decision-making in the movie industry.
+
+The output shows the following correlation coefficients between the variables:
+revenue and vote_average: A very weak positive correlation (0.07601032), indicating almost no linear relationship.
+revenue and vote_count: A strong positive correlation (0.7898246), suggesting that movies with higher revenue tend to have more votes.
+
+
+```{r plot correlation, echo=TRUE}
+
+# Plot the correlation matrix
+corrplot(correlation, method = "circle")
+
+```
+This visualization helps identify strong relationships between variables. Dark blue circles indicate strong positive correlation, light blue circles indicate weaker correlation, gray circles indicate missing or infinite values, and question marks indicate missing values. The diagonal is always 1, and the matrix is symmetrical. The strong correlation between revenue and vote_count suggests that popular movies earn more, but higher earnings are not necessarily linked to higher average ratings.
+
+```{r scaling, echo=TRUE}
+scaled_data <- scale(numeric_data)
+
+# Print the scaled data
+head(scaled_data)
+
+```
+
+```{r data cleaning, echo=TRUE}
+scaled_data_no_na <- na.omit(scaled_data)
+
+
+```
+
+```{r data cleaning 2, echo=TRUE}
+# Replace infinite values with NA
+scaled_data_no_inf <- replace(scaled_data_no_na, is.infinite(scaled_data_no_na), NA)
+
+# Replace NA with the mean of each column
+scaled_data_no_inf_imputed <- apply(scaled_data_no_inf, 2, function(x) ifelse(is.na(x), mean(x, na.rm = TRUE), x))
+
+
+```
+
+
+## Principal Component Analysis (PCA)
+
+The main aspect of the project involves the use of PCA, which is a powerful technique used for reducing the dimensionality of data. This step transforms the original variables into a new set of variables known as the principal components. These components are uncorrelated and help in capturing the maximum variance present in the data. applying PCA to the scaled numeric data and analyzing the results using scree plots and biplots. This helps in interpreting the obtained results more effectively.
+
+```{r perform PCA, echo=TRUE}
+# Perform PCA on the cleaned and imputed data
+pca_result <- prcomp(scaled_data_no_inf_imputed)
+
+# Print the summary of the PCA result
+summary(pca_result)
+
+
+```
+the PCA suggests that a dimensionality reduction approach could simplify the dataset significantly without losing too much information, thus potentially making subsequent analyses more efficient and interpretable.
+
+In a dataset, four main components are responsible for representing the data’s variability. PC1 is the most significant component, capturing 46.95% of the variance, indicating that it represents almost half of the data’s variability. PC2 is also a significant component, accounting for 27.79% of the variance. PC3 is responsible for a notable amount of information, representing 20% of the variance, while PC4 contains only 5.261% of the variance and may not be as informative as the other components. When considering the cumulative proportion, the first three components - PC1, PC2, and PC3 - together capture almost all of the variability (94.74%) present in the dataset.
+
+```{r mmnb, echo=TRUE}
+# Calculate cumulative variance
+cumulative_variance <- cumsum(pca_result$sdev^2) / sum(pca_result$sdev^2)
+
+# Find the number of components that explain at least 80% variance
+num_components_80_var <- which(cumulative_variance >= 0.80)[1]
+print(paste("Number of components explaining at least 80% variance: ", num_components_80_var))
+
+```
+The first three principal components (PC1, PC2, and PC3) account for 80% of the dataset’s variance. This is a common approach to dimensionality reduction.
+
+
+
+
+
+
+```{r new plot, echo=TRUE}
+# Extract the first three principal components
+pca_data <- pca_result$x[, 1:3]
+
+# Any subsequent analysis uses pca_data, which now only includes PC1, PC2, and PC3
+# For example, for visualization:
+library(ggplot2)
+ggplot(data.frame(pca_data), aes(x = PC1, y = PC2, color = PC3)) +
+  geom_point() +
+  labs(title = "Scatter Plot of the First Three Principal Components")
+
+```
+after the previous results and as per the pbservation from the plot by focusing on PC1, PC2, and PC3,we aree working with a simplified dataset that still captures the majority of the information (variance) from the original data.
+
+```{r inf., echo=TRUE}
+# Replace infinite values with NA
+scaled_data_no_inf <- replace(scaled_data, is.infinite(scaled_data), NA)
+
+# Replace NA with the mean of each column
+scaled_data_no_inf_imputed <- apply(scaled_data_no_inf, 2, function(x) ifelse(is.na(x), mean(x, na.rm = TRUE), x))
+
+```
+
+
+
+
+
+```{r scale}
+pca_model <- prcomp(scaled_data_no_inf_imputed, center = TRUE, scale. = TRUE)
+
+
+# Extract principal components
+x <- pca_model$x[, 1:3]  # Selecting the first 3 principal components
+
+# Print the transformed data
+head(x)
+```
+
+```{r how many dimensions, echo=TRUE}
+# Assuming 'x' is your transformed data obtained from PCA
+print(dim(x))
+```
+
+```{r how many dimensions1, echo=TRUE}
+# Assuming 'x' is your transformed data obtained from PCA
+num_rows <- nrow(x)
+num_cols <- ncol(x)
+
+print(paste("Number of rows: ", num_rows))
+print(paste("Number of columns: ", num_cols))
+```
+
+```{r eigen}
+eigen_vectors <- pca_model$rotation
+
+# Print the eigen vectors
+print(eigen_vectors)
+
+```
+these results indicates that:
+PC1 is influenced by revenue and vote_count it's appeared with high positive loadings, this can refer to that pc1 represent dimension of financial success.
+pc2 high positive loading for runtime reflecting movies that are both longer in duration and higher in viewer rating.
+pc3 represent strong negative loading from runtime and and strong positive loading from vote_average.
+This matrix shows how much each original variable contributes to each principal component. A higher absolute value indicates a stronger contribution.
+
+
+```{r mmn, include=FALSE}
+loadings_matrix <- pca_model$rotation
+
+# Print loadings
+print(loadings_matrix)
+
+```
+
+
+
+
+```{r fff, echo=TRUE}
+# Compute the absolute mean of loadings for each variable
+feature_importance <- apply(abs(loadings_matrix), 1, mean)
+
+# Print feature importance
+print(feature_importance)
+# Compute the absolute mean of loadings for each variable
+feature_importance <- apply(abs(loadings_matrix), 1, mean)
+
+# Print feature importance
+print(feature_importance)
+
+```
+## Visualization
+Employ visualizations like scatter plots and 3D scatter plots to represent the data in the reduced dimensional space. These visualizations aid in observing patterns, clusters, or outliers that might not be apparent in the higher-dimensional space.
+
+```{r ppp, echo=TRUE}
+biplot(pca_model)
+
+```
+The biplot provides insights into the relationships between variables and observations.
+Interpretation of the relationship between variables and components shows from this plot that PC2 appears to have a positive association with vote_average, whereas PC1 shows a relatively higher positive association with revenue and vote_count.
+
+```{r another plot}
+# 3D plot PCA-transformed data and contains PC3
+plot_data <- data.frame(PC1 = x[, 1], PC2 = x[, 2], PC3 = x[, 3])
+
+# Scatter plot of PC1 and PC2 with color representing PC3
+ggplot(plot_data, aes(x = PC1, y = PC2, color = PC3)) +
+  geom_point() +
+  scale_color_gradient2(low = "blue", high = "red", mid = "yellow", midpoint = median(plot_data$PC3)) +
+  labs(title = "Scatter Plot of PC1 vs PC2 with PC3 as Color")
+
+```
+
+
+
+```{r eigenvalues}
+eigenvalues <- pca_model$sdev^2
+
+# Print the eigenvalues
+print(eigenvalues)
+
+```
+
+```{r plot, eval=FALSE, include=FALSE}
+library(ggplot2)
+
+# Create a data frame for plotting
+plot_data <- data.frame(PC1 = x[, 1], PC2 = x[, 2])
+
+# Scatter plot of PC1 and PC2
+ggplot(plot_data, aes(x = PC1, y = PC2)) +
+  geom_point() +
+  labs(title = "Scatter Plot of PC1 vs PC2")
+
+```
+
+```{r ip, include=FALSE}
+install.packages("scatterplot3d")
+
+```
+
+```{r plot 2}
+library(scatterplot3d)
+
+# 3D Scatter plot of PC1, PC2, and PC3
+scatterplot3d(x[, 1], x[, 2], x[, 3], color = "red",
+              xlab = "PC1", ylab = "PC2", zlab = "PC3",
+              main = "3D Scatter Plot of PC1, PC2, and PC3")
+
+
+```
+
+
+The scatter plots above display the relationship between PC1 and PC2, with a color gradient reflecting PC3 values. The color intensity indicates the value of PC3, where darker colors may indicate higher values and lighter colors lower values. The technique allows us to include the third dimension of data in a 2D plot, providing a richer understanding of the dataset’s structure. The data points are mostly clustered around the origin, indicating a concentration of data in a smaller region of the principal component feature space, while the gradient of color shows the distribution of PC3 values within the scatter plot.
+
+
+```{r variance ratio}
+# PCA model obtained from prcomp()
+variance_explained <- (pca_model$sdev^2) / sum(pca_model$sdev^2)
+
+# Print the variance explained by each principal component
+print(variance_explained)
+
+```
+
+
+PC1 explains 46.56% of the variance, PC2 explains 27.94%, and PC3 explains 20.29%. Together, they capture almost 95% of the variance. These components contain most of the important information in the data, so reducing the dimensionality to these three components could be beneficial for visualization, analysis, and efficiency.
+
+
+
+```{r}
+cumulative_variance_explained <- cumsum(variance_explained)
+print(cumulative_variance_explained)
+
+
+```
+The cumulative variance explained is a measure used to determine how many principal components are needed to represent the data. The first three principal components account for about 95% of the total variance, so reducing dimensionality to these three can simplify the dataset, make it more interpretable, and reduce computational load for further analysis.
+
+
+## Overall conclusion
+
+We have explored the multivariate domain of movies metadata in this project to uncover underlying patterns while maintaining most of the variance by reducing the dataset's dimensionality through PCA. The analysis shows that the first three principal components (PC1, PC2, and PC3) explain about 94.79% of the variance in the dataset. As the first three components capture a significant level of cumulative variance, they are effective proxies for the original variables in the dataset.
+	- 	PC1 is mainly influenced by revenue and vote_count, indicating commercial success and popularity.
+	-	PC2 and PC3 are associated with runtime and vote_average, reflecting the content and critical reception of the movies.
+The biplots and scatter plots generated through this analysis have provided insights into how different features relate to each other in the context of movie data, visualizing the relationships and contributions of the original variables to these principal components.
+Dimensionality Reduction: By reducing the complexity of the dataset, the PCA has effectively enabled us to focus on fewer variables that capture the essence of the data.
+Interpretation of Components: The first three principal components encapsulate critical information ranging from financial success to audience and critical reception.
+Visualization: The graphical representations have offered a clear understanding of the data structure, which is essential for further analysis such as clustering or classification.
+
+
+
+
+
